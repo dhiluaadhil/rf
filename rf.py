@@ -3,42 +3,50 @@ import joblib
 import numpy as np
 import os
 
-st.set_page_config(page_title="Cancer Risk Predictor", page_icon="🎗️")
-st.title("🎗️ Cancer Risk Prediction (Random Forest)")
+st.set_page_config(page_title="Cancer Risk Predictor", layout="wide")
 
-# Load Model
+st.title("🎗️ Cancer Risk Prediction Dashboard")
+
 model_path = 'cancer_model.pkl'
+
 if os.path.exists(model_path):
     model = joblib.load(model_path)
+    
+    with st.sidebar:
+        st.header("Patient Data Input")
+        age = st.slider("Age", 18, 100, 50)
+        gender = st.radio("Gender", ["Female", "Male"])
+        bmi = st.number_input("BMI", 10.0, 50.0, 25.0)
+        smoking = st.selectbox("Smoker?", ["No", "Yes"])
+        gen_risk = st.selectbox("Genetic Risk", ["Low", "Medium", "High"])
+        phys_act = st.slider("Physical Activity (hrs/week)", 0, 20, 5)
+        alcohol = st.slider("Alcohol Units/week", 0, 30, 5)
+        history = st.selectbox("Previous Cancer History?", ["No", "Yes"])
 
-    st.write("Enter the details below to predict the likelihood of a cancer diagnosis.")
+    # --- Convert inputs to numbers for the model ---
+    gender_num = 0 if gender == "Female" else 1
+    smoking_num = 1 if smoking == "Yes" else 0
+    history_num = 1 if history == "Yes" else 0
+    gen_risk_map = {"Low": 0, "Medium": 1, "High": 2}
+    gen_num = gen_risk_map[gen_risk]
 
-    # Form for inputs based on your CSV columns
-    with st.form("prediction_form"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            age = st.number_input("Age", min_value=0, max_value=120, value=50)
-            gender = st.selectbox("Gender (0=Female, 1=Male)", [0, 1])
-            bmi = st.number_input("BMI", min_value=10.0, max_value=60.0, value=25.0)
-            smoking = st.selectbox("Smoking (0=No, 1=Yes)", [0, 1])
-            
-        with col2:
-            gen_risk = st.selectbox("Genetic Risk (0=Low, 1=Medium, 2=High)", [0, 1, 2])
-            phys_act = st.number_input("Physical Activity (hours/week)", 0.0, 168.0, 3.0)
-            alcohol = st.number_input("Alcohol Intake (units/week)", 0.0, 100.0, 2.0)
-            history = st.selectbox("Personal History of Cancer (0=No, 1=Yes)", [0, 1])
+    # Create input array
+    features = np.array([[age, gender_num, bmi, smoking_num, gen_num, phys_act, alcohol, history_num]])
 
-        submit = st.form_submit_button("Predict Risk")
-
-    if submit:
-        # Arrange features in the exact order the model was trained on
-        features = np.array([[age, gender, bmi, smoking, gen_risk, phys_act, alcohol, history]])
+    if st.button("Run Diagnostic"):
         prediction = model.predict(features)
+        probability = model.predict_proba(features)[0][1] * 100
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if prediction[0] == 1:
+                st.error(f"### Result: High Risk detected")
+            else:
+                st.success(f"### Result: Low Risk detected")
         
-        if prediction[0] == 1:
-            st.error("🚨 **High Risk:** The model predicts a positive diagnosis.")
-        else:
-            st.success("✅ **Low Risk:** The model predicts a negative diagnosis.")
+        with col2:
+            st.metric("Confidence Level", f"{probability:.2f}%")
+            st.progress(probability / 100)
+
 else:
-    st.warning("Please upload 'cancer_model.pkl' to your GitHub repo.")
+    st.error("Model file not found. Please upload 'cancer_model.pkl' to GitHub.")
